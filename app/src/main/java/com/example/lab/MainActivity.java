@@ -1,18 +1,23 @@
 package com.example.lab;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.SyncStateContract;
 import android.text.TextUtils;
@@ -42,9 +47,15 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -58,43 +69,66 @@ public class MainActivity extends AppCompatActivity {
     public static final int PICK_IMAGE = 1;
     private static final int REQUEST_EXTERNAL_STORAGE = 1;
     private static String[] PERMISSIONS_STORAGE = {
-            Manifest.permission.READ_EXTERNAL_STORAGE,	Manifest.permission.WRITE_EXTERNAL_STORAGE,Manifest.permission.CAMERA};
+            Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.CAMERA};
     String report;
     LinearLayout layout;
-    int j,k;
-    String answer[];
+    int j = 0, k = 0;
+    Bundle bundle=new Bundle();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-        layout= findViewById(R.id.mainLayout);;
-        int permission = ActivityCompat.checkSelfPermission(this,Manifest.permission.WRITE_EXTERNAL_STORAGE);
+        setContentView(R.layout.layout);
+        layout = findViewById(R.id.mainLayout);
+        int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE);
         if (permission != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE,REQUEST_EXTERNAL_STORAGE);
+            ActivityCompat.requestPermissions(this, PERMISSIONS_STORAGE, REQUEST_EXTERNAL_STORAGE);
         }
-        Intent intent=new Intent();
+        Intent intent = new Intent();
         intent.setType("image/*");
         intent.setAction(Intent.ACTION_GET_CONTENT);
 
-        Intent innerIntent = new Intent(Intent.ACTION_PICK,
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-        Intent wrapperIntent = Intent.createChooser(intent, "select pictures");
+        //Intent innerIntent = new Intent(Intent.ACTION_PICK,
+        // MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        // Intent wrapperIntent = Intent.createChooser(innerIntent, "select pictures");
         //Intent intent = new Intent(Intent.ACTION_PICK,MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         //startActivityForResult(intent, PICK_IMAGE);
-        startActivityForResult(wrapperIntent, PICK_IMAGE);
+        // Intent intent=new Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        //intent.setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI,"image/*");
+        //startActivityForResult(wrapperIntent, PICK_IMAGE);
+        //Intent intent = new Intent(Intent.ACTION_PICK,android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+        startActivityForResult(intent, PICK_IMAGE);
     }
 
     @Override
-    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent intent) {
-        super.onActivityResult(requestCode, resultCode, intent);
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == PICK_IMAGE && resultCode == Activity.RESULT_OK) {
+            if (data == null) {
+                //Display an error
+                Toast.makeText(this, "parse fail", Toast.LENGTH_LONG).show();
+                return;
+            }
+            try {
+                InputStream inputStream = getApplicationContext().getContentResolver().openInputStream(data.getData());
+                Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
+                String str = parseQRcode(bitmap);
+                AnalysisJson(str);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
 
-        if(requestCode==PICK_IMAGE){//从图库选择图片
+
+        /*if(intent==null)return;
+        if(requestCode==PICK_IMAGE&& resultCode == RESULT_OK && null != data){//从图库选择图片
             String[] proj = {MediaStore.Images.Media.DATA};
             // 获取选中图片的路径
             Cursor cursor = this.getContentResolver().query(intent.getData(),proj, null, null, null);
             if (cursor != null && cursor.moveToFirst()) {
                 String path = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Images.Media.DATA));
+                System.out.println(path);
                 String result= parseQRcode(path);
                 if (!TextUtils.isEmpty(result)) {
                     AnalysisJson(result);
@@ -112,17 +146,33 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(this,"parse fail",Toast.LENGTH_LONG).show();
                 }
             }*/
-            cursor.close();
-        }
-    }
+    // cursor.close();*/
 
-    public static String parseQRcode(String bitmapPath){
+        /*Uri selectedImage = data.getData();
+        String[] filePathColumn = { MediaStore.Images.Media.DATA };
+        //获取选择照片的数据视图
+        Cursor cursor = getContentResolver().query(selectedImage,
+                filePathColumn, null, null, null);
+        cursor.moveToFirst();
+        //从数据视图中获取已选择图片的路径
+        int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
+        String photoPath = cursor.getString(columnIndex);
+        String result= parseQRcode(photoPath);
+        if (!TextUtils.isEmpty(result)) {
+            AnalysisJson(result);
+        } else {
+            Toast.makeText(this,"parse fail",Toast.LENGTH_LONG).show();
+        }
+        cursor.close();*/
+
+
+    public static String parseQRcode(String bitmapPath) {
         Bitmap bitmap = BitmapFactory.decodeFile(bitmapPath, null);
-        String result=parseQRcode(bitmap);
+        String result = parseQRcode(bitmap);
         return result;
     }
 
-    public static String parseQRcode(Bitmap bmp){
+    public static String parseQRcode(Bitmap bmp) {
         //bmp=comp(bmp);//bitmap压缩  如果不压缩的话在低配置的手机上解码很慢
 
         int width = bmp.getWidth();
@@ -133,13 +183,13 @@ public class MainActivity extends AppCompatActivity {
         QRCodeReader reader = new QRCodeReader();
         Map<DecodeHintType, Object> hints = new EnumMap<>(DecodeHintType.class);
         hints.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);//优化精度
-        hints.put(DecodeHintType.CHARACTER_SET,"utf-8");//解码设置编码方式为：utf-8
+        hints.put(DecodeHintType.CHARACTER_SET, "utf-8");//解码设置编码方式为：utf-8
         try {
             Result result = reader.decode(new BinaryBitmap(
                     new HybridBinarizer(new RGBLuminanceSource(width, height, pixels))), hints);
             return result.getText();
         } catch (NotFoundException e) {
-            Log.i("ansen",""+e.toString());
+            Log.i("ansen", "" + e.toString());
             e.printStackTrace();
         } catch (ChecksumException e) {
             e.printStackTrace();
@@ -149,10 +199,10 @@ public class MainActivity extends AppCompatActivity {
         return null;
     }
 
-    public static void uploadLogFile(Context context, String uploadUrl, String oldFilePath){
+    public static void uploadLogFile(Context context, String uploadUrl, String oldFilePath) {
         try {
             URL url = new URL(uploadUrl);
-            HttpURLConnection con = (HttpURLConnection)url.openConnection();
+            HttpURLConnection con = (HttpURLConnection) url.openConnection();
 
             // 允许Input、Output，不使用Cache
             con.setDoInput(true);
@@ -188,18 +238,17 @@ public class MainActivity extends AppCompatActivity {
             ds.flush();
             fStream.close();
             ds.close();
-            if(con.getResponseCode() == 200){
-                Toast.makeText(context,oldFilePath,Toast.LENGTH_LONG).show();
+            if (con.getResponseCode() == 200) {
+                Toast.makeText(context, oldFilePath, Toast.LENGTH_LONG).show();
             }
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.makeText(context,e.toString(),Toast.LENGTH_LONG).show();
+            Toast.makeText(context, e.toString(), Toast.LENGTH_LONG).show();
         }
     }
 
     public void AnalysisJson(String text) {
 
-        System.out.println(text);
         try {
             JSONObject object = new JSONObject(text);
             JSONObject result=new JSONObject();
@@ -210,16 +259,12 @@ public class MainActivity extends AppCompatActivity {
             result.put("date",date);
             result.put("EMEI","null");
             JSONArray questions=new JSONArray();
-            /*for(int i=0;i<jsonArray.length();i++){//survey
-                JSONObject jsonObject=jsonArray.getJSONObject(i);*/
+            //for(int i=0;i<jsonArray.length();i++){//survey
+                //JSONObject jsonObject=jsonArray.getJSONObject(i);
             int len = jsonObject.getInt("len");
-            answer=new String[len];
-            for(int i=0;i<len;i++){
-                answer[i]="";
-            }
             result.put("len",len);
             JSONArray question = jsonObject.getJSONArray("questions");
-            for (j = 0; j < question.length(); j++) {//questions
+            for (int j = 0; j < question.length(); j++) {//questions
                 RadioGroup radioGroup = new RadioGroup(this);
                 JSONObject jsonObject1 = question.getJSONObject(j);
                 String question_text = String.valueOf(j + 1)+"." + jsonObject1.getString("question");
@@ -227,33 +272,39 @@ public class MainActivity extends AppCompatActivity {
                 String type = jsonObject1.getString("type");
                 TextView textView = new TextView(this);
                 textView.setText(question_text);
-                System.out.println(question_text);
                 layout.addView(textView);
                 if (type.equals("single")) {
                     layout.addView(radioGroup);
                 }
                 JSONArray option = jsonObject1.getJSONArray("options");
-                for (k = 0; k < option.length(); k++) {//options
+                for (int k = 0; k < option.length(); k++) {//options
                     JSONObject jsonObject11 = option.getJSONObject(k);
                     String str = jsonObject11.getString(String.valueOf(k + 1));
                     if (type.equals("single")) {
                         final RadioButton button = new RadioButton(this);
                         button.setText(str);
+                        button.setTag(j);
                         button.setOnClickListener(new View.OnClickListener() {
                             @Override
                             public void onClick(View v) {
-                                answer[j]=k+"."+button.getText().toString();
-
+                                if(button.getTag().toString()!=null) {
+                                    System.out.println(button.getTag().toString());
+                                }
+                                if(button.getText().toString()!=null) {
+                                    System.out.println(button.getText().toString());
+                                }
+                                bundle.putString(button.getTag().toString(),button.getText().toString());
                             }
                         });
                         radioGroup.addView(button);
                     } else {
                         final CheckBox box = new CheckBox(this);
                         box.setText(str);
+                        box.setTag(j);
                         box.setOnClickListener(new View.OnClickListener() {
                             @Override
                             public void onClick(View v) {
-                                answer[j]=answer[j]+k+"."+box.getText().toString();
+                                bundle.putString(box.getTag().toString(),box.getText().toString());
                             }
                         });
                         layout.addView(box);
@@ -268,13 +319,13 @@ public class MainActivity extends AppCompatActivity {
                     q.put("type", type);
                     q.put("question", jsonObject1.getString("question"));
                     JSONArray array=new JSONArray();
-                    String t[];
-                    t=answer[i].split("\\.");
-                    for(int m=0;m<t.length;m=m+2){
-                        JSONObject option=new JSONObject();
-                        option.put(t[m],t[m+1]);
-                        array.put(option);
-                    }
+                    //String t[];
+                    //t=answer[i].split("\\.");
+                    //System.out.println("t.length="+answer[i]);
+                    //for(int m=0;m<t.length;m=m+2){
+                    JSONObject option=new JSONObject();
+                    option.put(String.valueOf(i+1),bundle.getString(String.valueOf(i)));
+                    array.put(option);
                     q.put("options",array);
                     questions.put(q);
             }
@@ -301,5 +352,5 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
 }
+
